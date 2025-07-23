@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { FlightData } from '@/types/flights';
 import { fetchFlights, LLIRIA_COORDINATES } from '@/lib/opensky';
 import FlightCard from '@/components/FlightCard';
+import LEDFlightBoard from '@/components/LEDFlightBoard';
 
 export default function Home() {
   const [flights, setFlights] = useState<FlightData[]>([]);
@@ -11,6 +12,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [radius, setRadius] = useState(50);
+  const [displayMode, setDisplayMode] = useState<'cards' | 'led'>('led');
 
   const loadFlights = async () => {
     setLoading(true);
@@ -45,19 +47,35 @@ export default function Home() {
         </header>
 
         <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
-          <div className="flex items-center gap-4">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Search radius:
-            </label>
-            <select 
-              value={radius} 
-              onChange={(e) => setRadius(Number(e.target.value))}
-              className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-            >
-              <option value={25}>25 km</option>
-              <option value={50}>50 km</option>
-              <option value={100}>100 km</option>
-            </select>
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Search radius:
+              </label>
+              <select 
+                value={radius} 
+                onChange={(e) => setRadius(Number(e.target.value))}
+                className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              >
+                <option value={25}>25 km</option>
+                <option value={50}>50 km</option>
+                <option value={100}>100 km</option>
+              </select>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Display:
+              </label>
+              <select 
+                value={displayMode} 
+                onChange={(e) => setDisplayMode(e.target.value as 'cards' | 'led')}
+                className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              >
+                <option value="led">🖥️ LED Board</option>
+                <option value="cards">📱 Cards</option>
+              </select>
+            </div>
           </div>
           
           <button
@@ -94,18 +112,22 @@ export default function Home() {
               </h2>
             </div>
 
-            {flights.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-gray-600 dark:text-gray-300">
-                  No flights currently detected in the area.
-                </p>
-              </div>
+            {displayMode === 'led' ? (
+              <LEDFlightBoard flights={flights} />
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {flights.map((flight) => (
-                  <FlightCard key={flight.icao24} flight={flight} />
-                ))}
-              </div>
+              flights.length === 0 ? (
+                <div className="text-center py-12">
+                  <p className="text-gray-600 dark:text-gray-300">
+                    No flights currently detected in the area.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {flights.map((flight) => (
+                    <FlightCard key={flight.icao24} flight={flight} />
+                  ))}
+                </div>
+              )
             )}
           </>
         )}
