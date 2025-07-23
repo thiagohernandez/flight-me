@@ -118,7 +118,11 @@ async function getAircraftInfo(
   }
 
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/aircraft/${icao24}`);
+    const response = await fetch(
+      `${
+        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+      }/api/aircraft/${icao24}`
+    );
 
     if (!response.ok) {
       const fallback = { aircraft: "Unknown", operator: "Unknown" };
@@ -175,29 +179,11 @@ function calculateDistance(
   return R * c;
 }
 
-async function getAccessToken(): Promise<string | null> {
+async function getFlightAccessToken(): Promise<string | null> {
   try {
-    const response = await fetch(
-      "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: new URLSearchParams({
-          grant_type: "client_credentials",
-          client_id: process.env.OPEN_SKY_CLIENT_ID || "",
-          client_secret: process.env.OPEN_SKY_CLIENT_SECRET || "",
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(`Auth failed: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data.access_token;
+    const { getAccessToken } = await import("@/lib/token-manager");
+    const tokenData = await getAccessToken();
+    return tokenData?.access_token || null;
   } catch (error) {
     console.error("Token request failed:", error);
     return null;
@@ -207,10 +193,10 @@ async function getAccessToken(): Promise<string | null> {
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const radiusKm = Number(searchParams.get('radius')) || 50;
+    const radiusKm = Number(searchParams.get("radius")) || 50;
 
-    const token = await getAccessToken();
-    console.log("Access token:", token);
+    const token = await getFlightAccessToken();
+    // console.log("Access token:", token);
     if (!token) {
       return NextResponse.json(
         { error: "Failed to retrieve access token" },
@@ -253,19 +239,19 @@ export async function GET(request: Request) {
       return NextResponse.json([]);
     }
 
-    console.log("Raw flight data:", data.states);
+    // console.log("Raw flight data:", data.states);
 
     // Convert the raw data to our FlightData format and filter by distance
-    console.log("Total states before filtering:", data.states.length);
+    // console.log("Total states before filtering:", data.states.length);
 
     const validStates = data.states.filter(
       (state) => state[5] !== null && state[6] !== null && !state[8]
     );
-    console.log("Valid airborne states:", validStates.length);
+    // console.log("Valid airborne states:", validStates.length);
 
     const flights: FlightData[] = validStates
       .map((state) => {
-        console.log("Raw state:", state);
+        // console.log("Raw state:", state);
         const callsign = state[1]?.trim() || "Unknown";
         return {
           icao24: state[0],
@@ -282,36 +268,36 @@ export async function GET(request: Request) {
         };
       })
       .filter((flight) => {
-        console.log(
-          `Flight ${flight.callsign} coords:`,
-          flight.latitude,
-          flight.longitude
-        );
-        console.log(
-          `Base coords:`,
-          LLIRIA_COORDINATES.latitude,
-          LLIRIA_COORDINATES.longitude
-        );
+        // console.log(
+        //   `Flight ${flight.callsign} coords:`,
+        //   flight.latitude,
+        //   flight.longitude
+        // );
+        // console.log(
+        //   `Base coords:`,
+        //   LLIRIA_COORDINATES.latitude,
+        //   LLIRIA_COORDINATES.longitude
+        // );
         const distance = calculateDistance(
           LLIRIA_COORDINATES.latitude,
           LLIRIA_COORDINATES.longitude,
           flight.latitude,
           flight.longitude
         );
-        console.log(
-          `Flight ${flight.callsign}: distance ${distance.toFixed(
-            2
-          )}km, within ${radiusKm}km?`,
-          distance <= radiusKm
-        );
+        // console.log(
+        //   `Flight ${flight.callsign}: distance ${distance.toFixed(
+        //     2
+        //   )}km, within ${radiusKm}km?`,
+        //   distance <= radiusKm
+        // );
         return distance <= radiusKm;
       });
 
-    console.log("Flights fetched:", flights);
-    console.log(
-      flights,
-      `Found ${flights.length} flights within ${radiusKm} km of Lliria`
-    );
+    // console.log("Flights fetched:", flights);
+    // console.log(
+    //   flights,
+    //   `Found ${flights.length} flights within ${radiusKm} km of Lliria`
+    // );
 
     // Asynchronously fetch aircraft info and update operator for each flight
     const flightsWithAircraftInfo = await Promise.all(
