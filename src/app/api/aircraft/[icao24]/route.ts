@@ -3,9 +3,9 @@ import { AircraftMetadata } from '@/types/flights';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { icao24: string } }
+  context: { params: Promise<{ icao24: string }> }
 ) {
-  const { icao24 } = params;
+  const { icao24 } = await context.params;
   
   if (!icao24) {
     return NextResponse.json({ error: 'ICAO24 required' }, { status: 400 });
