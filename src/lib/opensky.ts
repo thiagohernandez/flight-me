@@ -1,17 +1,21 @@
 import { FlightData } from "@/types/flights";
+import { getDefaultLocation } from "@/data/locations";
 
-// Lliria, Spain coordinates (Valencia Airport)
-export const LLIRIA_COORDINATES = {
-  latitude: 39.489,
-  longitude: -0.481,
-};
+// Export default coordinates for backward compatibility
+export const LLIRIA_COORDINATES = getDefaultLocation();
 
 // Fetch flights using server-side API route
 export async function fetchFlights(
-  radiusKm: number = 50
+  radiusKm: number = 50,
+  locationId?: string
 ): Promise<FlightData[]> {
   try {
-    const response = await fetch(`/api/flights?radius=${radiusKm}`);
+    const params = new URLSearchParams({
+      radius: radiusKm.toString(),
+      ...(locationId && { location: locationId }),
+    });
+    
+    const response = await fetch(`/api/flights?${params}`);
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));

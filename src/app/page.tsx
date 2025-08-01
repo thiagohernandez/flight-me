@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { FlightData } from '@/types/flights';
-import { fetchFlights, LLIRIA_COORDINATES } from '@/lib/opensky';
+import { fetchFlights } from '@/lib/opensky';
+import { locations, getLocationById, getDefaultLocation } from '@/data/locations';
 import FlightCard from '@/components/FlightCard';
 import LEDFlightBoard from '@/components/LEDFlightBoard';
 
@@ -13,12 +14,15 @@ export default function Home() {
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [radius, setRadius] = useState(50);
   const [displayMode, setDisplayMode] = useState<'cards' | 'led'>('led');
+  const [selectedLocationId, setSelectedLocationId] = useState('lliria');
 
-  const loadFlights = async () => {
+  const selectedLocation = getLocationById(selectedLocationId) || getDefaultLocation();
+
+  const loadFlights = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const flightData = await fetchFlights(radius);
+      const flightData = await fetchFlights(radius, selectedLocationId);
       setFlights(flightData);
       setLastUpdate(new Date());
     } catch (err) {
@@ -26,28 +30,45 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [radius, selectedLocationId]);
 
   useEffect(() => {
     loadFlights();
     const interval = setInterval(loadFlights, 30000); // Update every 30 seconds
     return () => clearInterval(interval);
-  }, [radius]);
+  }, [loadFlights]);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="container mx-auto px-4 py-8">
         <header className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
-            ✈️ Flights Over Lliria
+            ✈️ Flights Over {selectedLocation.name}
           </h1>
           <p className="text-gray-600 dark:text-gray-300">
-            Real-time flight tracking over Lliria, Spain ({LLIRIA_COORDINATES.latitude.toFixed(4)}, {LLIRIA_COORDINATES.longitude.toFixed(4)})
+            Real-time flight tracking over {selectedLocation.name}, {selectedLocation.country} ({selectedLocation.latitude.toFixed(4)}, {selectedLocation.longitude.toFixed(4)})
           </p>
         </header>
 
         <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
-          <div className="flex items-center gap-6">
+          <div className="flex flex-wrap items-center gap-6">
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Location:
+              </label>
+              <select 
+                value={selectedLocationId} 
+                onChange={(e) => setSelectedLocationId(e.target.value)}
+                className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white min-w-[160px]"
+              >
+                {locations.map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.name}, {location.country}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 Search radius:

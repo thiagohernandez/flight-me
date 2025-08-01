@@ -1,11 +1,7 @@
 import { NextResponse } from "next/server";
 import { FlightData, OpenSkyResponse, AircraftMetadata } from "@/types/flights";
+import { getLocationById, getDefaultLocation } from "@/data/locations";
 
-// Lliria, Spain coordinates (Valencia Airport)
-const LLIRIA_COORDINATES = {
-  latitude: 39.489,
-  longitude: -0.481,
-};
 
 // Airline ICAO code lookup table
 const AIRLINE_CODES: Record<string, string> = {
@@ -194,6 +190,14 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const radiusKm = Number(searchParams.get("radius")) || 50;
+    const locationId = searchParams.get("location") || "lliria";
+    
+    // Get the coordinates for the selected location
+    const location = getLocationById(locationId) || getDefaultLocation();
+    const coordinates = {
+      latitude: location.latitude,
+      longitude: location.longitude,
+    };
 
     const token = await getFlightAccessToken();
     // console.log("Access token:", token);
@@ -204,18 +208,18 @@ export async function GET(request: Request) {
       );
     }
 
-    // Calculate bounding box for the area around Lliria
+    // Calculate bounding box for the area around the selected location
     const kmPerDegreeLat = 111;
     const kmPerDegreeLon =
-      111 * Math.cos((LLIRIA_COORDINATES.latitude * Math.PI) / 180);
+      111 * Math.cos((coordinates.latitude * Math.PI) / 180);
 
     const latDelta = radiusKm / kmPerDegreeLat;
     const lonDelta = radiusKm / kmPerDegreeLon;
 
-    const minLat = LLIRIA_COORDINATES.latitude - latDelta;
-    const maxLat = LLIRIA_COORDINATES.latitude + latDelta;
-    const minLon = LLIRIA_COORDINATES.longitude - lonDelta;
-    const maxLon = LLIRIA_COORDINATES.longitude + lonDelta;
+    const minLat = coordinates.latitude - latDelta;
+    const maxLat = coordinates.latitude + latDelta;
+    const minLon = coordinates.longitude - lonDelta;
+    const maxLon = coordinates.longitude + lonDelta;
 
     const url = `https://opensky-network.org/api/states/all?lamin=${minLat}&lomin=${minLon}&lamax=${maxLat}&lomax=${maxLon}`;
 
@@ -279,8 +283,8 @@ export async function GET(request: Request) {
         //   LLIRIA_COORDINATES.longitude
         // );
         const distance = calculateDistance(
-          LLIRIA_COORDINATES.latitude,
-          LLIRIA_COORDINATES.longitude,
+          coordinates.latitude,
+          coordinates.longitude,
           flight.latitude,
           flight.longitude
         );
