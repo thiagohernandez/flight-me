@@ -175,14 +175,20 @@ function calculateDistance(
   return R * c;
 }
 
-async function getFlightAccessToken(): Promise<string | null> {
+async function getFlightAccessToken(): Promise<{
+  token: string | null;
+  response?: NextResponse;
+}> {
   try {
-    const { getAccessToken } = await import("@/lib/token-manager");
-    const tokenData = await getAccessToken();
-    return tokenData?.access_token || null;
+    const { getAccessTokenWithResponse } = await import("@/lib/token-manager");
+    const result = await getAccessTokenWithResponse();
+    return {
+      token: result.token?.access_token || null,
+      response: result.response
+    };
   } catch (error) {
     console.error("Token request failed:", error);
-    return null;
+    return { token: null };
   }
 }
 
@@ -199,9 +205,9 @@ export async function GET(request: Request) {
       longitude: location.longitude,
     };
 
-    const token = await getFlightAccessToken();
-    // console.log("Access token:", token);
-    if (!token) {
+    const tokenResult = await getFlightAccessToken();
+    // console.log("Access token:", tokenResult.token);
+    if (!tokenResult.token) {
       return NextResponse.json(
         { error: "Failed to retrieve access token" },
         { status: 500 }
@@ -226,7 +232,7 @@ export async function GET(request: Request) {
     const response = await fetch(url, {
       headers: {
         "User-Agent": "Flight Tracker Lliria/1.0",
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${tokenResult.token}`,
       },
     });
 
@@ -315,7 +321,23 @@ export async function GET(request: Request) {
       })
     );
 
-    return NextResponse.json(flightsWithAircraftInfo);
+    // Create the response with flight data
+    const flightResponse = NextResponse.json(flightsWithAircraftInfo);
+    
+    // If we have a token response with cookies, copy the opensky_token cookie
+    if (tokenResult.response && tokenResult.response.cookies.get('opensky_token')) {
+      const tokenCookie = tokenResult.response.cookies.get('opensky_token');
+      if (tokenCookie) {
+        flightResponse.cookies.set('opensky_token', tokenCookie.value, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          maxAge: 1800, // 30 minutes
+        });
+      }
+    }
+    
+    return flightResponse;
   } catch (error) {
     console.error("Error fetching flights:", error);
     return NextResponse.json(
