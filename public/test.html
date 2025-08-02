@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LED Dot Matrix Display</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        background: #000;
+        font-family: Arial, sans-serif;
+        overflow: hidden;
+      }
+      #container {
+        width: 100vw;
+        height: 100vh;
+        position: relative;
+      }
+      #controls {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        z-index: 100;
+        color: #fff;
+        background: rgba(0, 0, 0, 0.7);
+        padding: 15px;
+        border-radius: 8px;
+        backdrop-filter: blur(5px);
+      }
+      #controls input {
+        margin: 5px 0;
+        padding: 8px;
+        border: none;
+        border-radius: 4px;
+        background: #333;
+        color: #fff;
+        width: 200px;
+      }
+      #controls button {
+        padding: 8px 15px;
+        margin: 5px 5px 5px 0;
+        border: none;
+        border-radius: 4px;
+        background: #ff4444;
+        color: #fff;
+        cursor: pointer;
+        transition: background 0.3s;
+      }
+      #controls button:hover {
+        background: #ff6666;
+      }
+      #controls label {
+        display: block;
+        margin-top: 10px;
+        font-size: 12px;
+      }
+      #speedControl {
+        width: 150px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="container">
+      <div id="controls">
+        <input
+          type="text"
+          id="textInput"
+          placeholder="Enter text to display"
+          value="HELLO WORLD"
+        />
+        <button onclick="updateText()">Update Text</button>
+        <label for="speedControl">Scroll Speed:</label>
+        <input
+          type="range"
+          id="speedControl"
+          min="0.5"
+          max="5"
+          step="0.1"
+          value="1.5"
+          onchange="updateSpeed(this.value)"
+        />
+        <div style="margin-top: 10px; font-size: 11px; opacity: 0.8">
+          Drag to rotate • Scroll to zoom
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+      // Scene setup
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(
+        75,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        1000
+      );
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setClearColor(0x000011, 1);
+      document.getElementById("container").appendChild(renderer.domElement);
+
+      // LED Matrix Configuration
+      const MATRIX_WIDTH = 64; // columns
+      const MATRIX_HEIGHT = 16; // rows
+      const LED_SIZE = 0.15;
+      const LED_SPACING = 0.3;
+      const SCROLL_SPEED = 1.5;
+
+      // Font bitmap (5x7 pixel font)
+      const FONT_MAP = {
+        A: [
+          [0, 1, 1, 1, 0],
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [1, 1, 1, 1, 1],
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [0, 0, 0, 0, 0],
+        ],
+        B: [
+          [1, 1, 1, 1, 0],
+          [1, 0, 0, 0, 1],
+          [1, 1, 1, 1, 0],
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [1, 1, 1, 1, 0],
+          [0, 0, 0, 0, 0],
+        ],
+        C: [
+          [0, 1, 1, 1, 0],
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 0],
+          [1, 0, 0, 0, 0],
+          [1, 0, 0, 0, 1],
+          [0, 1, 1, 1, 0],
+          [0, 0, 0, 0, 0],
+        ],
+        D: [
+          [1, 1, 1, 1, 0],
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [1, 1, 1, 1, 0],
+          [0, 0, 0, 0, 0],
+        ],
+        E: [
+          [1, 1, 1, 1, 1],
+          [1, 0, 0, 0, 0],
+          [1, 1, 1, 1, 0],
+          [1, 0, 0, 0, 0],
+          [1, 0, 0, 0, 0],
+          [1, 1, 1, 1, 1],
+          [0, 0, 0, 0, 0],
+        ],
+        F: [
+          [1, 1, 1, 1, 1],
+          [1, 0, 0, 0, 0],
+          [1, 1, 1, 1, 0],
+          [1, 0, 0, 0, 0],
+          [1, 0, 0, 0, 0],
+          [1, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0],
+        ],
+        G: [
+          [0, 1, 1, 1, 0],
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 0],
+          [1, 0, 1, 1, 1],
+          [1, 0, 0, 0, 1],
+          [0, 1, 1, 1, 0],
+          [0, 0, 0, 0, 0],
+        ],
+        H: [
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [1, 1, 1, 1, 1],
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [0, 0, 0, 0, 0],
+        ],
+        I: [
+          [0, 1, 1, 1, 0],
+          [0, 0, 1, 0, 0],
+          [0, 0, 1, 0, 0],
+          [0, 0, 1, 0, 0],
+          [0, 0, 1, 0, 0],
+          [0, 1, 1, 1, 0],
+          [0, 0, 0, 0, 0],
+        ],
+        J: [
+          [0, 0, 0, 0, 1],
+          [0, 0, 0, 0, 1],
+          [0, 0, 0, 0, 1],
+          [0, 0, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [0, 1, 1, 1, 0],
+          [0, 0, 0, 0, 0],
+        ],
+        K: [
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 1, 0],
+          [1, 0, 1, 0, 0],
+          [1, 1, 0, 0, 0],
+          [1, 0, 1, 0, 0],
+          [1, 0, 0, 1, 0],
+          [0, 0, 0, 0, 0],
+        ],
+        L: [
+          [1, 0, 0, 0, 0],
+          [1, 0, 0, 0, 0],
+          [1, 0, 0, 0, 0],
+          [1, 0, 0, 0, 0],
+          [1, 0, 0, 0, 0],
+          [1, 1, 1, 1, 1],
+          [0, 0, 0, 0, 0],
+        ],
+        M: [
+          [1, 0, 0, 0, 1],
+          [1, 1, 0, 1, 1],
+          [1, 0, 1, 0, 1],
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [0, 0, 0, 0, 0],
+        ],
+        N: [
+          [1, 0, 0, 0, 1],
+          [1, 1, 0, 0, 1],
+          [1, 0, 1, 0, 1],
+          [1, 0, 0, 1, 1],
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [0, 0, 0, 0, 0],
+        ],
+        O: [
+          [0, 1, 1, 1, 0],
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [0, 1, 1, 1, 0],
+          [0, 0, 0, 0, 0],
+        ],
+        P: [
+          [1, 1, 1, 1, 0],
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [1, 1, 1, 1, 0],
+          [1, 0, 0, 0, 0],
+          [1, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0],
+        ],
+        Q: [
+          [0, 1, 1, 1, 0],
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [1, 0, 1, 0, 1],
+          [1, 0, 0, 1, 0],
+          [0, 1, 1, 0, 1],
+          [0, 0, 0, 0, 0],
+        ],
+        R: [
+          [1, 1, 1, 1, 0],
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [1, 1, 1, 1, 0],
+          [1, 0, 1, 0, 0],
+          [1, 0, 0, 1, 0],
+          [0, 0, 0, 0, 0],
+        ],
+        S: [
+          [0, 1, 1, 1, 1],
+          [1, 0, 0, 0, 0],
+          [0, 1, 1, 1, 0],
+          [0, 0, 0, 0, 1],
+          [0, 0, 0, 0, 1],
+          [1, 1, 1, 1, 0],
+          [0, 0, 0, 0, 0],
+        ],
+        T: [
+          [1, 1, 1, 1, 1],
+          [0, 0, 1, 0, 0],
+          [0, 0, 1, 0, 0],
+          [0, 0, 1, 0, 0],
+          [0, 0, 1, 0, 0],
+          [0, 0, 1, 0, 0],
+          [0, 0, 0, 0, 0],
+        ],
+        U: [
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [0, 1, 1, 1, 0],
+          [0, 0, 0, 0, 0],
+        ],
+        V: [
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [0, 1, 0, 1, 0],
+          [0, 0, 1, 0, 0],
+          [0, 0, 0, 0, 0],
+        ],
+        W: [
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [1, 0, 1, 0, 1],
+          [1, 1, 0, 1, 1],
+          [1, 0, 0, 0, 1],
+          [0, 0, 0, 0, 0],
+        ],
+        X: [
+          [1, 0, 0, 0, 1],
+          [0, 1, 0, 1, 0],
+          [0, 0, 1, 0, 0],
+          [0, 1, 0, 1, 0],
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [0, 0, 0, 0, 0],
+        ],
+        Y: [
+          [1, 0, 0, 0, 1],
+          [0, 1, 0, 1, 0],
+          [0, 0, 1, 0, 0],
+          [0, 0, 1, 0, 0],
+          [0, 0, 1, 0, 0],
+          [0, 0, 1, 0, 0],
+          [0, 0, 0, 0, 0],
+        ],
+        Z: [
+          [1, 1, 1, 1, 1],
+          [0, 0, 0, 1, 0],
+          [0, 0, 1, 0, 0],
+          [0, 1, 0, 0, 0],
+          [1, 0, 0, 0, 0],
+          [1, 1, 1, 1, 1],
+          [0, 0, 0, 0, 0],
+        ],
+        " ": [
+          [0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0],
+          [0, 0, 0, 0, 0],
+        ],
+        0: [
+          [0, 1, 1, 1, 0],
+          [1, 0, 0, 1, 1],
+          [1, 0, 1, 0, 1],
+          [1, 1, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [0, 1, 1, 1, 0],
+          [0, 0, 0, 0, 0],
+        ],
+        1: [
+          [0, 0, 1, 0, 0],
+          [0, 1, 1, 0, 0],
+          [0, 0, 1, 0, 0],
+          [0, 0, 1, 0, 0],
+          [0, 0, 1, 0, 0],
+          [0, 1, 1, 1, 0],
+          [0, 0, 0, 0, 0],
+        ],
+        2: [
+          [0, 1, 1, 1, 0],
+          [1, 0, 0, 0, 1],
+          [0, 0, 0, 1, 0],
+          [0, 0, 1, 0, 0],
+          [0, 1, 0, 0, 0],
+          [1, 1, 1, 1, 1],
+          [0, 0, 0, 0, 0],
+        ],
+        3: [
+          [1, 1, 1, 1, 0],
+          [0, 0, 0, 0, 1],
+          [0, 1, 1, 1, 0],
+          [0, 0, 0, 0, 1],
+          [0, 0, 0, 0, 1],
+          [1, 1, 1, 1, 0],
+          [0, 0, 0, 0, 0],
+        ],
+        4: [
+          [1, 0, 0, 1, 0],
+          [1, 0, 0, 1, 0],
+          [1, 0, 0, 1, 0],
+          [1, 1, 1, 1, 1],
+          [0, 0, 0, 1, 0],
+          [0, 0, 0, 1, 0],
+          [0, 0, 0, 0, 0],
+        ],
+        5: [
+          [1, 1, 1, 1, 1],
+          [1, 0, 0, 0, 0],
+          [1, 1, 1, 1, 0],
+          [0, 0, 0, 0, 1],
+          [0, 0, 0, 0, 1],
+          [1, 1, 1, 1, 0],
+          [0, 0, 0, 0, 0],
+        ],
+        6: [
+          [0, 1, 1, 1, 0],
+          [1, 0, 0, 0, 0],
+          [1, 1, 1, 1, 0],
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [0, 1, 1, 1, 0],
+          [0, 0, 0, 0, 0],
+        ],
+        7: [
+          [1, 1, 1, 1, 1],
+          [0, 0, 0, 0, 1],
+          [0, 0, 0, 1, 0],
+          [0, 0, 1, 0, 0],
+          [0, 1, 0, 0, 0],
+          [0, 1, 0, 0, 0],
+          [0, 0, 0, 0, 0],
+        ],
+        8: [
+          [0, 1, 1, 1, 0],
+          [1, 0, 0, 0, 1],
+          [0, 1, 1, 1, 0],
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [0, 1, 1, 1, 0],
+          [0, 0, 0, 0, 0],
+        ],
+        9: [
+          [0, 1, 1, 1, 0],
+          [1, 0, 0, 0, 1],
+          [1, 0, 0, 0, 1],
+          [0, 1, 1, 1, 1],
+          [0, 0, 0, 0, 1],
+          [0, 1, 1, 1, 0],
+          [0, 0, 0, 0, 0],
+        ],
+      };
+
+      // Create LED matrix
+      const leds = [];
+      const ledGroup = new THREE.Group();
+
+      // LED materials
+      const onMaterial = new THREE.MeshBasicMaterial({
+        color: 0xff4444,
+        transparent: true,
+        opacity: 1,
+      });
+
+      const offMaterial = new THREE.MeshBasicMaterial({
+        color: 0x441111,
+        transparent: true,
+        opacity: 0.3,
+      });
+
+      // Create individual LEDs
+      const ledGeometry = new THREE.SphereGeometry(LED_SIZE, 8, 6);
+
+      for (let row = 0; row < MATRIX_HEIGHT; row++) {
+        leds[row] = [];
+        for (let col = 0; col < MATRIX_WIDTH; col++) {
+          const led = new THREE.Mesh(ledGeometry, offMaterial.clone());
+          led.position.set(
+            (col - MATRIX_WIDTH / 2) * LED_SPACING,
+            (MATRIX_HEIGHT / 2 - row) * LED_SPACING,
+            0
+          );
+          ledGroup.add(led);
+          leds[row][col] = led;
+        }
+      }
+
+      scene.add(ledGroup);
+
+      // Add subtle background panel
+      const panelGeometry = new THREE.PlaneGeometry(
+        MATRIX_WIDTH * LED_SPACING + 1,
+        MATRIX_HEIGHT * LED_SPACING + 1
+      );
+      const panelMaterial = new THREE.MeshBasicMaterial({
+        color: 0x111111,
+        transparent: true,
+        opacity: 0.8,
+      });
+      const panel = new THREE.Mesh(panelGeometry, panelMaterial);
+      panel.position.z = -0.5;
+      scene.add(panel);
+
+      // Add ambient lighting effect
+      const ambientLight = new THREE.AmbientLight(0x222222, 0.5);
+      scene.add(ambientLight);
+
+      // Animation variables
+      let currentText = "HELLO WORLD";
+      let scrollOffset = 0;
+      let scrollSpeed = SCROLL_SPEED;
+
+      // Convert text to bitmap
+      function textToBitmap(text) {
+        const bitmap = [];
+        const totalWidth = text.length * 6; // 5 pixels per char + 1 space
+
+        for (let row = 0; row < 7; row++) {
+          bitmap[row] = [];
+          let colIndex = 0;
+
+          for (let i = 0; i < text.length; i++) {
+            const char = text[i].toUpperCase();
+            const fontData = FONT_MAP[char] || FONT_MAP[" "];
+
+            for (let col = 0; col < 5; col++) {
+              bitmap[row][colIndex] = fontData[row][col];
+              colIndex++;
+            }
+            // Add space between characters
+            bitmap[row][colIndex] = 0;
+            colIndex++;
+          }
+        }
+
+        return bitmap;
+      }
+
+      // Update LED display
+      function updateDisplay() {
+        const bitmap = textToBitmap(currentText);
+        const bitmapWidth = bitmap[0] ? bitmap[0].length : 0;
+
+        for (let row = 0; row < MATRIX_HEIGHT; row++) {
+          for (let col = 0; col < MATRIX_WIDTH; col++) {
+            let isOn = false;
+
+            if (row < 7 && row >= 0) {
+              // Only use first 7 rows for text
+              const textCol =
+                Math.floor(col + scrollOffset) % (bitmapWidth + MATRIX_WIDTH);
+              if (textCol >= 0 && textCol < bitmapWidth && bitmap[row]) {
+                isOn = bitmap[row][textCol] === 1;
+              }
+            }
+
+            // Update LED appearance with smooth transition
+            const led = leds[row][col];
+            const targetColor = isOn ? 0xff4444 : 0x441111;
+            const targetOpacity = isOn ? 1 : 0.3;
+
+            // Smooth color transition
+            const currentColor = led.material.color.getHex();
+            if (currentColor !== targetColor) {
+              led.material.color.setHex(targetColor);
+              led.material.opacity = targetOpacity;
+
+              // Add glow effect for active LEDs
+              if (isOn) {
+                led.scale.setScalar(1.2);
+              } else {
+                led.scale.setScalar(1.0);
+              }
+            }
+          }
+        }
+      }
+
+      // Camera controls
+      let mouseDown = false;
+      let mouseX = 0;
+      let mouseY = 0;
+      let targetRotationX = 0;
+      let targetRotationY = 0;
+      let currentRotationX = 0;
+      let currentRotationY = 0;
+
+      renderer.domElement.addEventListener("mousedown", (event) => {
+        mouseDown = true;
+        mouseX = event.clientX;
+        mouseY = event.clientY;
+      });
+
+      renderer.domElement.addEventListener("mousemove", (event) => {
+        if (!mouseDown) return;
+
+        const deltaX = event.clientX - mouseX;
+        const deltaY = event.clientY - mouseY;
+
+        targetRotationY += deltaX * 0.01;
+        targetRotationX += deltaY * 0.01;
+
+        mouseX = event.clientX;
+        mouseY = event.clientY;
+      });
+
+      renderer.domElement.addEventListener("mouseup", () => {
+        mouseDown = false;
+      });
+
+      renderer.domElement.addEventListener("wheel", (event) => {
+        camera.position.z += event.deltaY * 0.01;
+        camera.position.z = Math.max(5, Math.min(30, camera.position.z));
+      });
+
+      // Set initial camera position
+      camera.position.set(0, 0, 15);
+      camera.lookAt(0, 0, 0);
+
+      // Animation loop
+      function animate() {
+        requestAnimationFrame(animate);
+
+        // Update scroll position
+        scrollOffset += scrollSpeed * 0.1;
+
+        // Smooth camera rotation
+        currentRotationX += (targetRotationX - currentRotationX) * 0.1;
+        currentRotationY += (targetRotationY - currentRotationY) * 0.1;
+
+        ledGroup.rotation.x = currentRotationX;
+        ledGroup.rotation.y = currentRotationY;
+
+        // Update display
+        updateDisplay();
+
+        // Render
+        renderer.render(scene, camera);
+      }
+
+      // Control functions
+      function updateText() {
+        const input = document.getElementById("textInput");
+        currentText = input.value || "HELLO WORLD";
+        scrollOffset = 0; // Reset scroll position
+      }
+
+      function updateSpeed(value) {
+        scrollSpeed = parseFloat(value);
+      }
+
+      // Handle window resize
+      window.addEventListener("resize", () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      // Make functions globally available
+      window.updateText = updateText;
+      window.updateSpeed = updateSpeed;
+
+      // Start animation
+      animate();
+    </script>
+  </body>
+</html>

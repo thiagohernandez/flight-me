@@ -155,6 +155,29 @@ async function getAircraftInfo(
   }
 }
 
+// Get flight route information (origin city)
+async function getFlightRoute(icao24: string): Promise<{ originCity: string }> {
+  if (!icao24) return { originCity: "Unknown" };
+
+  try {
+    const response = await fetch(
+      `${
+        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+      }/api/flight-route/${icao24}`
+    );
+
+    if (!response.ok) {
+      return { originCity: "Unknown" };
+    }
+
+    const routeData = await response.json();
+    return { originCity: routeData.originCity || "Unknown" };
+  } catch (error) {
+    console.error(`Failed to fetch route for ${icao24}:`, error);
+    return { originCity: "Unknown" };
+  }
+}
+
 // Function to calculate distance between two points using Haversine formula
 function calculateDistance(
   lat1: number,
@@ -309,14 +332,19 @@ export async function GET(request: Request) {
     //   `Found ${flights.length} flights within ${radiusKm} km of Lliria`
     // );
 
-    // Asynchronously fetch aircraft info and update operator for each flight
+    // Asynchronously fetch aircraft info and route data for each flight
     const flightsWithAircraftInfo = await Promise.all(
       flights.map(async (flight) => {
-        const { aircraft, operator } = await getAircraftInfo(flight.icao24);
+        const [aircraftInfo, routeInfo] = await Promise.all([
+          getAircraftInfo(flight.icao24),
+          getFlightRoute(flight.icao24)
+        ]);
+        
         return {
           ...flight,
-          aircraft,
-          airline: operator !== "Unknown" ? operator : flight.airline,
+          aircraft: aircraftInfo.aircraft,
+          airline: aircraftInfo.operator !== "Unknown" ? aircraftInfo.operator : flight.airline,
+          originCity: routeInfo.originCity,
         };
       })
     );

@@ -1,11 +1,16 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { FlightData } from '@/types/flights';
-import { fetchFlights } from '@/lib/opensky';
-import { locations, getLocationById, getDefaultLocation } from '@/data/locations';
-import FlightCard from '@/components/FlightCard';
-import LEDFlightBoard from '@/components/LEDFlightBoard';
+import { useState, useEffect, useCallback } from "react";
+import { FlightData } from "@/types/flights";
+import { fetchFlights } from "@/lib/opensky";
+import {
+  locations,
+  getLocationById,
+  getDefaultLocation,
+} from "@/data/locations";
+import FlightCard from "@/components/FlightCard";
+import LEDFlightBoard from "@/components/LEDFlightBoard";
+import SimpleLED3D from "@/components/SimpleLED3D";
 
 export default function Home() {
   const [flights, setFlights] = useState<FlightData[]>([]);
@@ -13,10 +18,11 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [radius, setRadius] = useState(50);
-  const [displayMode, setDisplayMode] = useState<'cards' | 'led'>('led');
-  const [selectedLocationId, setSelectedLocationId] = useState('lliria');
+  const [displayMode, setDisplayMode] = useState<"cards" | "led" | "3d">("led");
+  const [selectedLocationId, setSelectedLocationId] = useState("lliria");
 
-  const selectedLocation = getLocationById(selectedLocationId) || getDefaultLocation();
+  const selectedLocation =
+    getLocationById(selectedLocationId) || getDefaultLocation();
 
   const loadFlights = useCallback(async () => {
     setLoading(true);
@@ -24,9 +30,10 @@ export default function Home() {
     try {
       const flightData = await fetchFlights(radius, selectedLocationId);
       setFlights(flightData);
+      console.log(flightData);
       setLastUpdate(new Date());
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load flights');
+      setError(err instanceof Error ? err.message : "Failed to load flights");
     } finally {
       setLoading(false);
     }
@@ -46,7 +53,9 @@ export default function Home() {
             ✈️ Flights Over {selectedLocation.name}
           </h1>
           <p className="text-gray-600 dark:text-gray-300">
-            Real-time flight tracking over {selectedLocation.name}, {selectedLocation.country} ({selectedLocation.latitude.toFixed(4)}, {selectedLocation.longitude.toFixed(4)})
+            Real-time flight tracking over {selectedLocation.name},{" "}
+            {selectedLocation.country} ({selectedLocation.latitude.toFixed(4)},{" "}
+            {selectedLocation.longitude.toFixed(4)})
           </p>
         </header>
 
@@ -56,8 +65,8 @@ export default function Home() {
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 Location:
               </label>
-              <select 
-                value={selectedLocationId} 
+              <select
+                value={selectedLocationId}
                 onChange={(e) => setSelectedLocationId(e.target.value)}
                 className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white min-w-[160px]"
               >
@@ -68,13 +77,13 @@ export default function Home() {
                 ))}
               </select>
             </div>
-            
+
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 Search radius:
               </label>
-              <select 
-                value={radius} 
+              <select
+                value={radius}
                 onChange={(e) => setRadius(Number(e.target.value))}
                 className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
               >
@@ -83,28 +92,31 @@ export default function Home() {
                 <option value={100}>100 km</option>
               </select>
             </div>
-            
+
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 Display:
               </label>
-              <select 
-                value={displayMode} 
-                onChange={(e) => setDisplayMode(e.target.value as 'cards' | 'led')}
+              <select
+                value={displayMode}
+                onChange={(e) =>
+                  setDisplayMode(e.target.value as "cards" | "led" | "3d")
+                }
                 className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
               >
                 <option value="led">🖥️ LED Board</option>
+                <option value="3d">🎮 3D LED Matrix</option>
                 <option value="cards">📱 Cards</option>
               </select>
             </div>
           </div>
-          
+
           <button
             onClick={loadFlights}
             disabled={loading}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-md transition-colors"
           >
-            {loading ? 'Loading...' : 'Refresh'}
+            {loading ? "Loading..." : "Refresh"}
           </button>
         </div>
 
@@ -123,7 +135,9 @@ export default function Home() {
         {loading && flights.length === 0 ? (
           <div className="text-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600 dark:text-gray-300">Loading flights...</p>
+            <p className="text-gray-600 dark:text-gray-300">
+              Loading flights...
+            </p>
           </div>
         ) : (
           <>
@@ -133,22 +147,22 @@ export default function Home() {
               </h2>
             </div>
 
-            {displayMode === 'led' ? (
+            {displayMode === "led" ? (
               <LEDFlightBoard flights={flights} />
+            ) : displayMode === "3d" ? (
+              <SimpleLED3D flights={flights} />
+            ) : flights.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-gray-600 dark:text-gray-300">
+                  No flights currently detected in the area.
+                </p>
+              </div>
             ) : (
-              flights.length === 0 ? (
-                <div className="text-center py-12">
-                  <p className="text-gray-600 dark:text-gray-300">
-                    No flights currently detected in the area.
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {flights.map((flight) => (
-                    <FlightCard key={flight.icao24} flight={flight} />
-                  ))}
-                </div>
-              )
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {flights.map((flight) => (
+                  <FlightCard key={flight.icao24} flight={flight} />
+                ))}
+              </div>
             )}
           </>
         )}

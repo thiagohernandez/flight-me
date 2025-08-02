@@ -36,6 +36,7 @@ export interface FlightData {
   velocity: number;
   heading: number;
   lastContact: number;
+  originCity?: string;
 }
 
 export interface AircraftMetadata {
