@@ -8,6 +8,16 @@ interface TokenCache {
 }
 
 async function fetchNewToken(): Promise<TokenCache> {
+  const clientId = process.env.OPEN_SKY_CLIENT_ID;
+  const clientSecret = process.env.OPEN_SKY_CLIENT_SECRET;
+  
+  if (!clientId || !clientSecret) {
+    console.error("Missing OpenSky credentials: OPEN_SKY_CLIENT_ID or OPEN_SKY_CLIENT_SECRET not set");
+    throw new Error("Missing OpenSky credentials");
+  }
+  
+  console.log("Requesting new token from OpenSky Network...");
+  
   const response = await fetch(
     "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token",
     {
@@ -17,20 +27,29 @@ async function fetchNewToken(): Promise<TokenCache> {
       },
       body: new URLSearchParams({
         grant_type: "client_credentials",
-        client_id: process.env.OPEN_SKY_CLIENT_ID || "",
-        client_secret: process.env.OPEN_SKY_CLIENT_SECRET || "",
+        client_id: clientId,
+        client_secret: clientSecret,
       }),
     }
   );
 
   if (!response.ok) {
-    throw new Error(`Auth failed: ${response.status}`);
+    const errorText = await response.text().catch(() => 'Unknown error');
+    console.error(`OpenSky auth failed: ${response.status} ${response.statusText}`, errorText);
+    throw new Error(`Auth failed: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();
   
+  if (!data.access_token || !data.expires_in) {
+    console.error("Invalid token response from OpenSky:", data);
+    throw new Error("Invalid token response");
+  }
+  
   // Calculate expiration time (subtract 5 minutes as buffer)
   const expiresAt = Date.now() + (data.expires_in - 300) * 1000;
+  
+  console.log(`New token obtained, expires in ${data.expires_in} seconds`);
   
   return {
     access_token: data.access_token,
@@ -48,11 +67,19 @@ async function getTokenFromCookies(): Promise<TokenCache | null> {
     const cookieStore = await cookies();
     const tokenData = cookieStore.get('opensky_token');
     
-    if (!tokenData) {
+    if (!tokenData || !tokenData.value) {
+      console.log('No token found in cookies');
       return null;
     }
     
     const token: TokenCache = JSON.parse(tokenData.value);
+    
+    // Validate the token structure
+    if (!token.access_token || !token.expires_at || typeof token.expires_at !== 'number') {
+      console.error('Invalid token structure in cookies');
+      return null;
+    }
+    
     return token;
   } catch (error) {
     console.error('Failed to parse token from cookies:', error);
@@ -74,7 +101,7 @@ export async function getAccessTokenWithResponse(): Promise<{
     const cookieToken = await getTokenFromCookies();
     
     if (cookieToken && !isTokenExpired(cookieToken)) {
-      console.log("Returning token from cookies");
+      console.log("Returning cached token from cookies");
       return {
         token: {
           access_token: cookieToken.access_token,
@@ -85,20 +112,28 @@ export async function getAccessTokenWithResponse(): Promise<{
     }
 
     // Token is expired or doesn't exist, fetch a new one
-    console.log("Fetching new token");
+    if (cookieToken) {
+      console.log("Token expired, fetching new token");
+    } else {
+      console.log("No token found in cookies, fetching new token");
+    }
+    
     const newToken = await fetchNewToken();
     
-    console.log("New token received");
+    console.log("New token received, expires at:", new Date(newToken.expires_at).toISOString());
     
     // Create response with cookie
     const response = new NextResponse();
     const maxAge = Math.floor((newToken.expires_at - Date.now()) / 1000);
     
+    // Ensure maxAge is positive and reasonable
+    const cookieMaxAge = maxAge > 0 ? Math.min(maxAge, 1800) : 1800;
+    
     response.cookies.set('opensky_token', JSON.stringify(newToken), {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: maxAge > 0 ? maxAge : 1800,
+      maxAge: cookieMaxAge,
     });
     
     return {
